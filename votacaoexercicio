@@ -2,10 +2,8 @@
 pragma solidity ^0.8.0;
 
 struct Voting {
-    string option1;
-    string option2;
-    uint votes1;
-    uint votes2;
+    string[] options;
+    mapping(uint => uint) votes;
     uint maxDate;
 }
 
@@ -18,7 +16,7 @@ struct Participant {
     string name;
     string imageUrl;
     uint age;
-    // Adicione outros campos conforme necessário, como foto, etc.
+    uint chosenOption;
 }
 
 contract wEBBB3 {
@@ -27,52 +25,49 @@ contract wEBBB3 {
     Voting[] public votings;
     mapping(uint => mapping(address => Vote)) public votes;
     mapping(address => Participant) public participants;
-
-    // Variável para controlar o número máximo de participantes
     uint public constant MAX_PARTICIPANTS = 4;
-
-    // Variável para armazenar o número atual de participantes
     uint public totalParticipants;
 
     constructor() {
         owner = msg.sender;
 
-        // Adiciona dados fictícios para 4 participantes no construtor
         addParticipant(address(0x1111111111111111111111111111111111111111), "Participant1", "url1", 25);
         addParticipant(address(0x2222222222222222222222222222222222222222), "Participant2", "url2", 30);
         addParticipant(address(0x3333333333333333333333333333333333333333), "Participant3", "url3", 28);
         addParticipant(address(0x4444444444444444444444444444444444444444), "Participant4", "url4", 22);
     }
 
-    function getCurrentVoting() public view returns (Voting memory) {
-        return votings[currentVoting];
+    function getCurrentVoting() public view returns (string[] memory, uint) {
+        return (votings[currentVoting].options, votings[currentVoting].maxDate);
     }
 
-    function addVoting(string memory option1, string memory option2, uint timeToVote) public {
-        require(msg.sender == owner, "Invalid sender");
+    function addVoting(string[] memory options, uint timeToVote) public {
+    require(msg.sender == owner, "Invalid sender");
 
-        if (currentVoting != 0) currentVoting++;
+    if (currentVoting != 0) currentVoting++;
 
-        Voting memory newVoting;
-        newVoting.option1 = option1;
-        newVoting.option2 = option2;
-        newVoting.maxDate = timeToVote + block.timestamp;
-        votings.push(newVoting);
+    Voting storage newVoting = votings[currentVoting];
+    newVoting.options = options;
+    newVoting.maxDate = timeToVote + block.timestamp;
+
+    for (uint i = 0; i < options.length; i++) {
+        newVoting.votes[i] = 0;
     }
+}
 
-    function addVote(uint choice) public {
-        require(choice == 1 || choice == 2, "Invalid choice");
-        require(getCurrentVoting().maxDate > block.timestamp, "No open voting");
+    function addVote(uint chosenOption) public {
+        (string[] memory options, uint maxDate) = getCurrentVoting();
+
+        require(chosenOption < options.length, "Invalid chosen option");
+        require(maxDate > block.timestamp, "No open voting");
         require(votes[currentVoting][msg.sender].date == 0, "You already voted on this voting");
 
-        // Adicionando timer lock de 1 voto por hora
         require(block.timestamp - votes[currentVoting][msg.sender].date >= 1 hours, "You can vote only once per hour");
 
-        votes[currentVoting][msg.sender].choice = choice;
-        votes[currentVoting][msg.sender].date = block.timestamp;
+        votes[currentVoting][msg.sender] = Vote(chosenOption, block.timestamp);
 
-        if (choice == 1) votings[currentVoting].votes1++;
-        else votings[currentVoting].votes2++;
+        votings[currentVoting].votes[chosenOption]++;
+        participants[msg.sender].chosenOption = chosenOption;
     }
 
     function addParticipant(address participantAddress, string memory name, string memory imageUrl, uint age) public {
@@ -84,7 +79,6 @@ contract wEBBB3 {
         newParticipant.imageUrl = imageUrl;
         newParticipant.age = age;
 
-        // Incrementa o número total de participantes
         totalParticipants++;
     }
 
